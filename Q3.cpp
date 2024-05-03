@@ -23,14 +23,19 @@ void doRequest (int numThread) {
 	
 	while (true){
 		unique_lock<mutex> lck(mtx);
-		cv.wait(lck, []{return !msg_queue.empty();});
-		rs = msg_queue.front();
-		msg_queue.pop();
-		cout << rs.request_id << " ";
-		cout << rs.ip_address << " ";
-		cout << rs.page_requested << endl;
-		cout << "Carrying Out Request " << rs.request_id << " With Thread " << numThread << endl;
-		lck.unlock();
+		//cv.wait(lck, []{return !msg_queue.empty();});
+		if (!msg_queue.empty()) {
+		
+			rs = msg_queue.front();
+			msg_queue.pop();
+			cout << rs.request_id << " ";
+			cout << rs.ip_address << " ";
+			cout << rs.page_requested << endl;
+			cout << "Carrying Out Request " << rs.request_id << " With Thread " << numThread << endl;
+			cv.wait(lck);
+		}
+		
+		//lck.unlock();
 	}	
 }
 
@@ -49,7 +54,7 @@ void listen () {
 		iSeconds = rand() % 3 + 1;
 		iPage = rand() % 9 + 0;    	
 		this_thread::sleep_for(chrono::seconds(iSeconds));   // Make the thread sleep for a random number of seconds (1-3)
-		lock_guard<mutex> lock(mtx);
+		unique_lock<mutex> lck(mtx);
 		// Add the required information to the requestStructure struct fields
 		rs.request_id = request_id; 
 		rs.ip_address = ip_address;
@@ -57,6 +62,7 @@ void listen () {
 		
 		// Push one struct into the queue and increment request_id
 		msg_queue.push(rs);
+		lck.unlock();
 		request_id++;
 
 		cv.notify_one(); // notify one waiting thread to wake up
@@ -67,17 +73,16 @@ void listen () {
 int main () {
 	int num_threads = 4;
 	thread threads[num_threads];
-	
+	thread t1(listen);
 	for (int i = 0; i < num_threads; i++) {
 		threads[i] = thread(doRequest, i); // Declare an array of threads
 	}
 
-	thread t1(listen);
-	
+	t1.join();
 	for (int i = 0; i < num_threads; i++) {
 		threads[i].join(); // Declare an array of threads
 	}
 	
-	t1.join();
+	
 	return 0;
 }
